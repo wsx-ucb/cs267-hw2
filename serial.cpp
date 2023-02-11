@@ -1,5 +1,26 @@
 #include "common.h"
 #include <cmath>
+#include <vector>
+using std::vector;
+
+static int bn;
+static vector<vector<particle_t*>> bins1;
+static vector<vector<particle_t*>> bins2;
+
+void classify(particle_t* p, vector<vector<particle_t*>>& bins, double size) {
+    int bi = p->x / cutoff;
+    int bj = p->y / cutoff;
+    bins[bi * bn + bj].push_back(p);
+}
+
+void init_simulation(particle_t* parts, int num_parts, double size) {
+    bn = ceil(size / cutoff);
+    bins1.resize(bn * bn);
+    bins2.resize(bn * bn);
+    for (int i = 0; i < num_parts; i++) {
+        classify(parts + i, bins1, size);
+    }
+}
 
 // Apply the force from neighbor to particle
 void apply_force(particle_t& particle, particle_t& neighbor) {
@@ -42,24 +63,33 @@ void move(particle_t& p, double size) {
     }
 }
 
-
-void init_simulation(particle_t* parts, int num_parts, double size) {
-	// You can use this space to initialize static, global data objects
-    // that you may need. This function will be called once before the
-    // algorithm begins. Do not do any particle simulation here
-}
-
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
-    // Compute Forces
-    for (int i = 0; i < num_parts; ++i) {
-        parts[i].ax = parts[i].ay = 0;
-        for (int j = 0; j < num_parts; ++j) {
-            apply_force(parts[i], parts[j]);
+    for (int i = 0; i < bn; i++) {
+        for (int j = 0; j < bn; j++) {
+            for (particle_t* p : bins1[i * bn + j]) {
+                p->ax = p->ay = 0;
+                for (int ni : {i-1, i, i+1}) {
+                    if (ni < 0 || ni >= bn) continue;
+                    for (int nj : {j-1, j, j+1}) {
+                        if (nj < 0 || nj >= bn || (ni == i && nj == j)) continue;
+                        for (particle_t* n : bins1[ni * bn + nj]) {
+                            apply_force(*p, *n);
+                        }
+                    }
+                }
+                for (particle_t* n : bins1[i * bn + j]) {
+                    if (n == p) continue;
+                    apply_force(*p, *n);
+                }
+            }
         }
     }
-
-    // Move Particles
-    for (int i = 0; i < num_parts; ++i) {
-        move(parts[i], size);
+    for (int i = 0; i < bn * bn; i++) {
+        bins2[i].clear();
     }
+    for (int i = 0; i < num_parts; i++) {
+        move(parts[i], size);
+        classify(parts + i, bins2, size);
+    }
+    std::swap(bins1, bins2);
 }
