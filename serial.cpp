@@ -4,10 +4,9 @@
 using std::vector;
 
 static int bn;
-static vector<vector<particle_t*>> bins1;
-static vector<vector<particle_t*>> bins2;
+static vector<vector<particle_t*>> bins;
 
-void classify(particle_t* p, vector<vector<particle_t*>>& bins, double size) {
+void classify(particle_t* p, double size) {
     int bi = p->x / cutoff;
     int bj = p->y / cutoff;
     bins[bi * bn + bj].push_back(p);
@@ -15,10 +14,9 @@ void classify(particle_t* p, vector<vector<particle_t*>>& bins, double size) {
 
 void init_simulation(particle_t* parts, int num_parts, double size) {
     bn = ceil(size / cutoff);
-    bins1.resize(bn * bn);
-    bins2.resize(bn * bn);
+    bins.resize(bn * bn);
     for (int i = 0; i < num_parts; i++) {
-        classify(parts + i, bins1, size);
+        classify(parts + i, size);
     }
 }
 
@@ -66,30 +64,25 @@ void move(particle_t& p, double size) {
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
     for (int i = 0; i < bn; i++) {
         for (int j = 0; j < bn; j++) {
-            for (particle_t* p : bins1[i * bn + j]) {
+            for (particle_t* p : bins[i * bn + j]) {
                 p->ax = p->ay = 0;
                 for (int ni : {i-1, i, i+1}) {
                     if (ni < 0 || ni >= bn) continue;
                     for (int nj : {j-1, j, j+1}) {
-                        if (nj < 0 || nj >= bn || (ni == i && nj == j)) continue;
-                        for (particle_t* n : bins1[ni * bn + nj]) {
+                        if (nj < 0 || nj >= bn) continue;
+                        for (particle_t* n : bins[ni * bn + nj]) {
                             apply_force(*p, *n);
                         }
                     }
-                }
-                for (particle_t* n : bins1[i * bn + j]) {
-                    if (n == p) continue;
-                    apply_force(*p, *n);
                 }
             }
         }
     }
     for (int i = 0; i < bn * bn; i++) {
-        bins2[i].clear();
+        bins[i].clear();
     }
     for (int i = 0; i < num_parts; i++) {
         move(parts[i], size);
-        classify(parts + i, bins2, size);
+        classify(parts + i, size);
     }
-    std::swap(bins1, bins2);
 }
