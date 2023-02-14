@@ -2,19 +2,19 @@
 #include <omp.h>
 #include <cmath>
 #include <vector>
+#include <algorithm>
+#include <iostream>
 using std::vector;
 
 static int bn;
 static vector<vector<particle_t*>> bins;
 static vector<omp_lock_t> locks;
 
-void classify(particle_t* p, double size) {
-    int bi = p->x / cutoff;
-    int bj = p->y / cutoff;
-    int idx = bi * bn + bj;
-    omp_set_lock(&locks[idx]);
+void bin(particle_t* p, int i, int j, bool locking) {
+    int idx = i * bn + j;
+    if (locking) omp_set_lock(&locks[idx]);
     bins[idx].push_back(p);
-    omp_unset_lock(&locks[idx]);
+    if (locking) omp_unset_lock(&locks[idx]);
 }
 
 void init_simulation(particle_t* parts, int num_parts, double size) {
@@ -25,7 +25,10 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
         omp_init_lock(&locks[i]);
     }
     for (int i = 0; i < num_parts; i++) {
-        classify(parts + i, size);
+        particle_t* p = parts + i;
+        int bi = p->x / cutoff;
+        int bj = p->y / cutoff;
+        bin(p, bi, bj, false);
     }
 }
 
@@ -70,11 +73,29 @@ void move(particle_t& p, double size) {
     }
 }
 
+struct group {
+    int imin, imax, jmin, jmax;
+};
+
+group get_group(int id, int total) {
+    group g;
+    int s = std::max((bn + total - 1) / total, 1);
+    g.imin = std::min(id * s, bn);
+    g.imax = std::min(g.imin + s, bn);
+    g.jmin = 0;
+    g.jmax = bn;
+    return g;
+}
+
+bool in_group(int i, int j, group const& g) {
+    return g.imin <= i && i < g.imax && g.jmin <= j && j < g.jmax;
+}
+
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
     #pragma omp barrier
-    #pragma omp for collapse(2) schedule(static)
-    for (int i = 0; i < bn; i++) {
-        for (int j = 0; j < bn; j++) {
+    group g = get_group(omp_get_thread_num(), omp_get_num_threads());
+    for (int i = g.imin; i < g.imax; i++) {
+        for (int j = g.jmin; j < g.jmax; j++) {
             for (particle_t* p : bins[i * bn + j]) {
                 p->ax = p->ay = 0;
                 for (int ni : {i-1, i, i+1}) {
@@ -89,13 +110,35 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
             }
         }
     }
-    #pragma omp for
-    for (int i = 0; i < bn * bn; i++) {
-        bins[i].clear();
+    struct movement {
+        particle_t* p;
+        int i, j;
+    };
+    vector<movement> in_group_moves;
+    vector<movement> out_group_moves;
+    #pragma omp barrier
+    for (int i = g.imin; i < g.imax; i++) {
+        for (int j = g.jmin; j < g.jmax; j++) {
+            vector<particle_t*>& b = bins[i * bn + j];
+            b.erase(std::remove_if(b.begin(), b.end(), [i, j, size, &in_group_moves, &out_group_moves, &g](particle_t* p) {
+                move(*p, size);
+                int bi = p->x / cutoff;
+                int bj = p->y / cutoff;
+                if (bi == i && bj == j) return false;
+                if (in_group(bi, bj, g)) {
+                    in_group_moves.push_back({p, bi, bj});
+                } else {
+                    out_group_moves.push_back({p, bi, bj});
+                }
+                return true;
+            }), b.end());
+        }
     }
-    #pragma omp for nowait
-    for (int i = 0; i < num_parts; i++) {
-        move(parts[i], size);
-        classify(parts + i, size);
+    for (movement m : in_group_moves) {
+        bin(m.p, m.i, m.j, false);
+    }
+    #pragma omp barrier
+    for (movement m : out_group_moves) {
+        bin(m.p, m.i, m.j, true);
     }
 }
