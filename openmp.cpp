@@ -52,6 +52,27 @@ void apply_force(particle_t& particle, particle_t& neighbor) {
     particle.ay += coef * dy;
 }
 
+void apply_force_2D(particle_t& particle, particle_t& neighbor) {
+    // Calculate Distance
+    double dx = neighbor.x - particle.x;
+    double dy = neighbor.y - particle.y;
+    double r2 = dx * dx + dy * dy;
+
+    // Check if the two particles should interact
+    if (r2 > cutoff * cutoff)
+        return;
+
+    r2 = fmax(r2, min_r * min_r);
+    double r = sqrt(r2);
+
+    // Very simple short-range repulsive force
+    double coef = (1 - cutoff / r) / r2 / mass;
+    particle.ax += coef * dx;
+    particle.ay += coef * dy;
+    neighbor.ax -= coef * dx;
+    neighbor.ay -= coef * dy;
+}
+
 // Integrate the ODE
 void move(particle_t& p, double size) {
     // Slightly simplified Velocity Verlet integration
@@ -94,22 +115,65 @@ bool in_group(int i, int j, group const& g) {
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
     #pragma omp barrier
     group g = get_group(omp_get_thread_num(), omp_get_num_threads());
+    // iterate through row order cells in group
     for (int i = g.imin; i < g.imax; i++) {
         for (int j = g.jmin; j < g.jmax; j++) {
+            // iterate trhoguh particles a bin at i,j
             for (particle_t* p : bins[i * bn + j]) {
+                // clear acceleration
                 p->ax = p->ay = 0;
+            }
+        }
+    }
+    for (int i = g.imin; i < g.imax; i++) {
+        for (int j = g.jmin; j < g.jmax; j++) {
+            // iterate trhoguh particles a bin at i,j
+            vector<particle_t*> bin = bins[i * bn + j]; //this is useful when comparing particles in the same bin
+            for (int p_i=0; p_i<bin.size; p_i++) {
+                particle_t* p = bin[p_i];
+                // comparision: iterate through rowsi-1 to i+1
                 for (int ni : {i-1, i, i+1}) {
+                    // skip comparison if not reasonable
                     if (ni < 0 || ni >= bn) continue;
+                    // iterate through cols j-1 to j+1
                     for (int nj : {j-1, j, j+1}) {
+                        // skip comparison if not reasonable
                         if (nj < 0 || nj >= bn) continue;
-                        for (particle_t* n : bins[ni * bn + nj]) {
-                            apply_force(*p, *n);
+                        // iterate though bins to compare particles.
+                        if ( (ni * bn + nj) < (i * bn + j) )    {
+                            if (ni<g.imin || nj<g.min)  {
+                                for (particle_t* n : bins[ni * bn + nj]) {
+                                    apply_force(*p, *n); //1-D
+                                }
+                            }
+                        }                        
+
+                        else if ( (ni * bn + nj) > (i * bn + j) )    {
+                            if (nj<g.min)  {
+                                for (particle_t* n : bins[ni * bn + nj]) {
+                                    apply_force(*p, *n); //1-D
+                                }
+                            }
+                            else {
+                                for (particle_t* n : bins[ni * bn + nj]) {
+                                    apply_force_2D(*p, *n); //2-D
+                                }
+                            }
+                        }
+
+                        else {
+                            for (int n_i=p_i+1; n_i<bin.size; n_i++) {
+                                particle_t* n = bin[n_i];
+                                    apply_force_2D(*p, *n); //2-D
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+
     struct movement {
         particle_t* p;
         int i, j;
