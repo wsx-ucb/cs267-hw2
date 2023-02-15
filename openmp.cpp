@@ -100,11 +100,26 @@ struct group {
 
 group get_group(int id, int total) {
     group g;
-    int s = std::max((bn + total - 1) / total, 1);
-    g.imin = std::min(id * s, bn);
-    g.imax = std::min(g.imin + s, bn);
-    g.jmin = 0;
-    g.jmax = bn;
+    int x=0; // threads along i
+    int y; // threads along j
+    while (!x)   {
+        double n = floor(sqrt(total));
+        while (n>sqrt(0.9*total))   {
+            if (total % n = 0)  {
+                x = n;
+                y = total / n;
+                break;
+            }
+            n--;
+        }
+        total --;
+    }
+    int g_i= bn/x; // bins per group along i, should round up since integers
+    int g_j= bn/y; // bins per group along j
+    g.imin = g_i* (id % x);
+    g.imax = std::min(g.imin + x, bn);
+    g.jmin = floor(id/y) * g_j;
+    g.jmax = std::min(g.jmin + y, bn);
     return g;
 }
 
