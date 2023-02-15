@@ -141,7 +141,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
                         if (nj < 0 || nj >= bn) continue;
                         // iterate though bins to compare particles.
                         if ( (ni * bn + nj) < (i * bn + j) )    {
-                            if (ni<g.imin || nj<g.min)  {
+                            if (ni<g.imin || nj<g.jmin || nj>g.jmax)  {
                                 for (particle_t* n : bins[ni * bn + nj]) {
                                     apply_force(*p, *n); //1-D
                                 }
@@ -149,7 +149,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
                         }                        
 
                         else if ( (ni * bn + nj) > (i * bn + j) )    {
-                            if (nj<g.min)  {
+                            if (ni>g.imax || nj>g.jmax || nj<g.jmin)  {
                                 for (particle_t* n : bins[ni * bn + nj]) {
                                     apply_force(*p, *n); //1-D
                                 }
