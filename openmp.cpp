@@ -100,14 +100,6 @@ bool in_group(int i, int j, group const& g) {
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
     #pragma omp barrier
     group g = get_group(omp_get_thread_num(), omp_get_num_threads());
-    // Clear particle acceleration initially
-    for (int i = g.imin; i < g.imax; i++) {
-        for (int j = g.jmin; j < g.jmax; j++) {
-            for (particle_t* p : bins[i * bn + j]) {
-                p->ax = p->ay = 0;
-            }
-        }
-    }
     // When possible, apply bidirectional force in the following pattern
     // - - -
     // - o *
@@ -161,6 +153,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
             vector<particle_t*>& b = bins[i * bn + j];
             auto f = [i, j, size, &in_group_moves, &out_group_moves, &g](particle_t* p) {
                 move(*p, size);
+                p->ax = p->ay = 0;
                 int bi = p->x / cutoff;
                 int bj = p->y / cutoff;
                 if (bi == i && bj == j)
