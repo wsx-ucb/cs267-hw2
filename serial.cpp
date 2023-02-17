@@ -16,7 +16,9 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     bn = ceil(size / cutoff);
     bins.resize(bn * bn);
     for (int i = 0; i < num_parts; i++) {
-        classify(parts + i, size);
+        particle_t* p = parts + i;
+        p->ax = p->ay = 0;
+        classify(p, size);
     }
 }
 

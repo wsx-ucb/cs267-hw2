@@ -28,6 +28,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     }
     for (int i = 0; i < num_parts; i++) {
         particle_t* p = parts + i;
+        p->ax = p->ay = 0;
         int bi = p->x / cutoff;
         int bj = p->y / cutoff;
         bin(p, bi, bj, false);
