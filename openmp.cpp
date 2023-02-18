@@ -4,11 +4,14 @@
 #include <iostream>
 #include <omp.h>
 #include <vector>
+#include <chrono>
+#include <atomic>
 using std::vector;
 
 static int bn;
 static vector<vector<particle_t*>> bins;
 static vector<omp_lock_t> locks;
+static std::atomic<int> comp_time;
 
 void bin(particle_t* p, int i, int j, bool locking) {
     int idx = i * bn + j;
@@ -23,6 +26,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     bn = ceil(size / cutoff);
     bins.resize(bn * bn);
     locks.resize(bn * bn);
+    comp_time = 0;
     for (int i = 0; i < bn * bn; i++) {
         omp_init_lock(&locks[i]);
     }
@@ -33,6 +37,12 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
         int bj = p->y / cutoff;
         bin(p, bi, bj, false);
     }
+}
+
+void cleanup_simulation() {
+    double comp = comp_time.load() / 1e6;
+    printf("Computation time: %f\n", comp);
+    printf("Computation time (per thread): %f\n", comp / omp_get_num_threads());
 }
 
 // Apply the force from neighbor to particle
@@ -120,7 +130,11 @@ bool in_group(int i, int j, group const& g) {
 
 void simulate_one_step(particle_t* parts, int num_parts, double size) {
     #pragma omp barrier
+    std::chrono::steady_clock::time_point start_time, end_time;
+    int duration = 0;
+    start_time = std::chrono::steady_clock::now();
     group g = get_group(omp_get_thread_num(), omp_get_num_threads());
+    // printf("%i, %i; %i, %i\n", g.imin, g.imax, g.jmin, g.jmax);
     // When possible, apply bidirectional force in the following pattern
     // - - -
     // - o *
@@ -168,7 +182,10 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     };
     vector<movement> in_group_moves;
     vector<movement> out_group_moves;
+    end_time = std::chrono::steady_clock::now();
+    duration += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
     #pragma omp barrier
+    start_time = std::chrono::steady_clock::now();
     for (int i = g.imin; i < g.imax; i++) {
         for (int j = g.jmin; j < g.jmax; j++) {
             vector<particle_t*>& b = bins[i * bn + j];
@@ -192,6 +209,9 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
     for (movement m : in_group_moves) {
         bin(m.p, m.i, m.j, false);
     }
+    end_time = std::chrono::steady_clock::now();
+    duration += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+    comp_time += duration;
     #pragma omp barrier
     for (movement m : out_group_moves) {
         bin(m.p, m.i, m.j, true);

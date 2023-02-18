@@ -136,6 +136,10 @@ int main(int argc, char** argv) {
                 save(fsave, parts, num_parts, size);
             }
         }
+#ifdef _OPENMP
+#pragma omp master
+#endif
+        cleanup_simulation();
     }
 
     auto end_time = std::chrono::steady_clock::now();

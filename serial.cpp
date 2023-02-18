@@ -22,6 +22,8 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
     }
 }
 
+void cleanup_simulation() {}
+
 // Apply the force from neighbor to particle
 void apply_force(particle_t& particle, particle_t& neighbor) {
     // Calculate Distance

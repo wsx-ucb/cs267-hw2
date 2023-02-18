@@ -23,5 +23,6 @@ typedef struct particle_t {
 // Simulation routine
 void init_simulation(particle_t* parts, int num_parts, double size);
 void simulate_one_step(particle_t* parts, int num_parts, double size);
+void cleanup_simulation();
 
 #endif
