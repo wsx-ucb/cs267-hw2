@@ -84,13 +84,33 @@ struct group {
     int imin, imax, jmin, jmax;
 };
 
+void helper(int m, int n, int i, int& imin, int& imax) {
+    int s = m / n;
+    int r = m % n;
+    imin = i * s + std::min(i, r);
+    imax = (i + 1) * s + std::min(i + 1, r);
+}
+
 group get_group(int id, int total) {
     group g;
-    int s = std::max((bn + total - 1) / total, 1);
-    g.imin = std::min(id * s, bn);
-    g.imax = std::min(g.imin + s, bn);
-    g.jmin = 0;
-    g.jmax = bn;
+    int s = floor(sqrt(total));
+    int r = total - s * s;
+    if (r < s) {
+        if (id < r * (s + 1)) {
+            helper(bn, s + 1, id % (s + 1), g.imin, g.imax);
+            helper(bn, s, id / (s + 1), g.jmin, g.jmax);
+            return g;
+        }
+        id -= r * (s + 1);
+        helper(bn, s, id % s, g.imin, g.imax);
+        helper(bn, s, id / s + r, g.jmin, g.jmax);
+        return g;
+    }
+    r -= s;
+    int i = id % (s + 1);
+    int j = id / (s + 1);
+    helper(bn, s + 1, i, g.imin, g.imax);
+    helper(bn, i < r ? s + 1 : s, j, g.jmin, g.jmax);
     return g;
 }
 
