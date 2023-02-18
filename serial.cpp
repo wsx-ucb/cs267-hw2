@@ -23,7 +23,7 @@ void init_simulation(particle_t* parts, int num_parts, double size) {
 }
 
 // Apply the force from neighbor to particle
-void apply_force(particle_t& particle, particle_t& neighbor, bool bidirectional) {
+void apply_force(particle_t& particle, particle_t& neighbor) {
     // Calculate Distance
     double dx = neighbor.x - particle.x;
     double dy = neighbor.y - particle.y;
@@ -40,10 +40,8 @@ void apply_force(particle_t& particle, particle_t& neighbor, bool bidirectional)
     double coef = (1 - cutoff / r) / r2 / mass;
     particle.ax += coef * dx;
     particle.ay += coef * dy;
-    if (bidirectional) {
-        neighbor.ax += coef * dx;
-        neighbor.ay += coef * dy;
-    }
+    neighbor.ax -= coef * dx;
+    neighbor.ay -= coef * dy;
 }
 
 // Integrate the ODE
@@ -72,20 +70,20 @@ void simulate_one_step(particle_t* parts, int num_parts, double size) {
         for (int j = 0; j < bn; j++) {
             vector<particle_t*>& bin = bins[i * bn + j];
             for (particle_t* p : bin) {
-                for (int ni : {i-1, i, i+1}) {
+                for (int ni : {i - 1, i, i + 1}) {
                     if (ni < 0 || ni >= bn) continue;
-                    for (int nj : {j-1, j, j+1}) {
+                    for (int nj : {j - 1, j, j + 1}) {
                         if (nj < 0 || nj >= bn || (ni == i && nj == j)) continue;
                         if (nj > j || (nj == j && ni < i)) continue;
                         for (particle_t* n : bins[ni * bn + nj]) {
-                            apply_force(*p, *n, true);
+                            apply_force(*p, *n);
                         }
                     }
                 }
             }
             for (int p = 0; p < bin.size(); p++) {
                 for (int n = p + 1; n < bin.size(); n++) {
-                    apply_force(*bin[p], *bin[n], true);
+                    apply_force(*bin[p], *bin[n]);
                 }
             }
         }
